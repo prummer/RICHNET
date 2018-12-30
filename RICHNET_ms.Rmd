@@ -3,8 +3,6 @@ title: "Enhancing gene set enrichment using networks"
 author: 
   - name: Michael Prummer
     affiliation: NEXUS Personalized Health Technologies, ETH Zurich, and Swiss Institute for Bioinformatics, Zurich, Switzerland.
-  # - name: Daniel Stekhoven
-  #   affiliation: SIB
 abstract: Differential gene expression (DGE) studies often suffer from poor interpretability of their primary results, i.e., thousands of differentially expressed genes. This has led to the introduction of gene set analysis (GSA) methods that aim at identifying interpretable global effects by grouping genes into sets of common context, such as, molecular pathways, biological function or tissue localization. In practice, GSA often results in hundreds of differentially regulated gene sets. Gene sets are often regulated in a correlative fashion because they share many of their genes or they describe related processes. Using these kind of neighborhood information to construct networks of gene sets allows to identify highly connected sub-networks as well as poorly connected islands or singletons. We show here how topological information and other network features can be used to filter and prioritize gene sets in routine DGE studies. Community detection in combination with automatic labeling and the network representation of gene set clusters further constitute an appealing and intuitive visualization of GSA results. The RICHNET workflow described here does not require human intervention and can thus be conveniently incorporated in automated analysis pipelines.
 keywords: differential gene expression analysis, gene set analysis, enrichment analysis, network analyis, GSEA.
 bibliography: richnet.bib
