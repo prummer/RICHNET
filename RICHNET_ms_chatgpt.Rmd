@@ -279,13 +279,13 @@ The result of this network-based clustering is shown in Fig. \@ref(fig:figure4)
 
 # Automatic annotation of gene set clusters
 
-For each gene set cluster, the member gene set names are provided to ChatGPT with the instruction to return a single concise 5-word label that best describes the common biological theme of the cluster. The OpenAI Chat Completions API (model `gpt-4.1`) is called and reads the API key from the environment variable `OPENAI_API_KEY`. The resulting 5-word labels are assigned to `cl3.lab.txt` and used exactly as before for plot titles. If `OPENAI_API_KEY` is not set, labels default to NA and a warning is emitted.
+For each gene set cluster, the member gene set names are provided to a Gemini model (via the Generative Language API) with the instruction to return a single concise 5-word label that best describes the common biological theme of the cluster. The R code below calls the Generative Language API (model `gemini-1.5`) and reads the API key from the environment variable `GEMINI_API_KEY`. The resulting 5-word labels are assigned to `cl3.lab.txt` and used exactly as before for plot titles. If `GEMINI_API_KEY` is not set, labels default to NA and a warning is emitted.
 
 ```{r chatgpt_labels, echo=F}
-# Prepare cluster member text for ChatGPT and call OpenAI API per cluster
+# Prepare cluster member text for Gemini and call Generative Language API per cluster
 # Try system env first, then fall back to a .env file in the working directory
-api_key <- Sys.getenv("OPENAI_API_KEY")
-if (nchar(api_key) == 0) {
+gemini_key <- Sys.getenv("GEMINI_API_KEY")
+if (nchar(gemini_key) == 0) {
   env_file <- "C:/Users/mprummer/Documents/_Michael/nexus_github/RICHNET/.env"
   if (file.exists(env_file)) {
     env_lines <- readLines(env_file, warn = FALSE)
@@ -293,12 +293,12 @@ if (nchar(api_key) == 0) {
     if (length(env_lines) > 0) {
       kv <- strsplit(env_lines, "=", fixed = TRUE)
       env_list <- setNames(lapply(kv, function(x) paste(x[-1], collapse = "=")), sapply(kv, function(x) trimws(x[1])))
-      if ("OPENAI_API_KEY" %in% names(env_list)) api_key <- trimws(env_list[["OPENAI_API_KEY"]])
+      if ("GEMINI_API_KEY" %in% names(env_list)) gemini_key <- trimws(env_list[["GEMINI_API_KEY"]])
     }
   }
 }
-if (nchar(api_key) == 0) {
-  warning("OPENAI_API_KEY not set: cluster labels will be NA. Set OPENAI_API_KEY in your environment or in a .env file in the working directory to enable ChatGPT labeling.")
+if (nchar(gemini_key) == 0) {
+  warning("GEMINI_API_KEY not set: cluster labels will be NA. Set GEMINI_API_KEY in your environment or in a .env file in the working directory to enable Gemini labeling.")
   cl3.lab.txt <- rep(NA, max(clu3$membership))
 } else {
   library(httr)
@@ -314,21 +314,28 @@ if (nchar(api_key) == 0) {
       members_text
     )
     body <- list(
-      model = "gpt-4.1",
-      messages = list(list(role = "user", content = prompt)),
-      temperature = 0.2,
-      max_tokens = 50
-    )
+          prompt = list(text = prompt),
+          temperature = 0.2,
+          maxOutputTokens = 200
+        )
     res <- POST(
-      url = "https://api.openai.com/v1/chat/completions",
-      add_headers(Authorization = paste("Bearer", api_key), `Content-Type` = "application/json"),
+          url = paste0("https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5:generateText?key=", URLencode(gemini_key, reserved = TRUE)),
+          add_headers(`Content-Type` = "application/json"),
       body = toJSON(body, auto_unbox = TRUE)
     )
     if (status_code(res) >= 400) {
-      warning("OpenAI API request failed: ", content(res, as = "text"))
+      warning("Generative Language API request failed: ", content(res, as = "text"))
       return(NA)
     }
-    txt <- content(res, as = "parsed", simplifyVector = TRUE)$choices[[1]]$message$content
+    resp_parsed <- content(res, as = "parsed", simplifyVector = TRUE)
+    txt <- NA
+    if (!is.null(resp_parsed$candidates) && length(resp_parsed$candidates) > 0) {
+      if (!is.null(resp_parsed$candidates[[1]]$content)) txt <- resp_parsed$candidates[[1]]$content
+      else if (!is.null(resp_parsed$candidates[[1]]$output)) txt <- resp_parsed$candidates[[1]]$output
+    } else if (!is.null(resp_parsed$choices) && length(resp_parsed$choices) > 0 && !is.null(resp_parsed$choices[[1]]$message$content)) {
+      txt <- resp_parsed$choices[[1]]$message$content
+    }
+    if (is.null(txt) || length(txt) == 0) return(NA)
     txt <- gsub("[\r\n]+", " ", txt)
     txt <- trimws(txt)
     # keep only first five words if model returned more
