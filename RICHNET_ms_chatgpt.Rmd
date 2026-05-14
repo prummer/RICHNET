@@ -194,6 +194,38 @@ ggnet2(net1, size = "size", max_size = 4, color = palette[V(net1)$Direction],
        size.cut = 4, edge.size = 1, edge.color = "#99CC33")
 ```
 
+
+
+### Identify binary systems (2 sets)
+
+Next we also want to separate clusters with less than 3 gene sets. To do so, we separate disjoint subnets as individual objects, count their members, and delete all vertices belonging to clusters of size smaller than 3.
+
+```{r binaryclusters, results="hide"}
+clu1 = igraph::components(net1)
+clu.lt3 = which(sizes(clu1) < 3)
+v.clu.lt3 = which(clu1$membership %in% clu.lt3)
+net2 = delete_vertices(net1, v.clu.lt3)
+clu2 = igraph::components(net2)
+in.clu.lt3 = which(dat$name %in% V(net1)$name[v.clu.lt3])
+tab = dat[in.clu.lt3, ]
+tab$FDR = signif(tab$FDR,2)
+cludp = clu1$membership[v.clu.lt3]
+cludp = data.frame(name = names(cludp), id = as.numeric(cludp))
+tab = merge(tab,cludp)
+tab$name = gsub("_", " ", tab$name)
+tab = kable(tab[order(tab$id), c("id", "name", "NGenes", "Direction", "FDR")], 
+            row.names=F, format = "latex", 
+            caption = "List of binary clusters as indicated by the id column.")
+kable_styling(tab, latex_options = "scale_down", font_size = 8)
+```
+
+\newpage
+
+```{r binaries, echo=F}
+kable_styling(tab, latex_options = "scale_down", font_size = 8)
+```
+
+
 In Table \@ref(tab:binaryclusters), consecutively listed gene sets with the same _id_ belong to the same binary cluster. Often these are gene sets from different libraries describing the same biological process or phenotype. In total, `r length(v.clu.lt3)` binary clusters were identified, for which network analysis would not be useful.
 
 
@@ -247,14 +279,14 @@ The result of this network-based clustering is shown in Fig. \@ref(fig:figure4)
 
 # Automatic annotation of gene set clusters
 
-This version replaces the previous word-frequency based automatic labeling with a call to ChatGPT. Plan: for each gene set cluster, the member gene set names are provided to ChatGPT with the instruction to return a single concise 5-word label that best describes the common biological theme of the cluster. The R code below calls the OpenAI Chat Completions API (model `gpt-4.1`) and reads the API key from the environment variable `OPENAI_API_KEY`. The resulting 5-word labels are assigned to `cl3.lab.txt` and used exactly as before for plot titles. If `OPENAI_API_KEY` is not set, labels default to NA and a warning is emitted.
+For each gene set cluster, the member gene set names are provided to ChatGPT with the instruction to return a single concise 5-word label that best describes the common biological theme of the cluster. The OpenAI Chat Completions API (model `gpt-4.1`) is called and reads the API key from the environment variable `OPENAI_API_KEY`. The resulting 5-word labels are assigned to `cl3.lab.txt` and used exactly as before for plot titles. If `OPENAI_API_KEY` is not set, labels default to NA and a warning is emitted.
 
 ```{r chatgpt_labels, echo=F}
 # Prepare cluster member text for ChatGPT and call OpenAI API per cluster
 # Try system env first, then fall back to a .env file in the working directory
 api_key <- Sys.getenv("OPENAI_API_KEY")
 if (nchar(api_key) == 0) {
-  env_file <- ".env"
+  env_file <- "C:/Users/mprummer/Documents/_Michael/nexus_github/RICHNET/.env"
   if (file.exists(env_file)) {
     env_lines <- readLines(env_file, warn = FALSE)
     env_lines <- env_lines[grepl("=", env_lines)]
@@ -272,7 +304,7 @@ if (nchar(api_key) == 0) {
   library(httr)
   library(jsonlite)
   # cluster members: one string per cluster with readable names
-  cluster_members <- tapply(rownames(data.frame(cl = clu3$membership)), cl = clu3$membership, FUN = function(x) paste(gsub("_", " ", x), collapse = "\n"))
+  cluster_members <- tapply(names(clu3$membership), clu3$membership, function(x) paste(gsub("_", " ", x), collapse = "\n"))
   # helper to query ChatGPT for a single cluster
   get_label <- function(members_text) {
     prompt <- paste0(
