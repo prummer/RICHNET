@@ -1,0 +1,2 @@
+In the file RICHNET\_ms.Rmd, in chapter "Automatic annotation of gene set clusters", replace the current method with a call to gemini, asking to give a 5 word label to each gene set cluster that best describes their common biological theme, and using this label in the same way as previously with the wordcount output. Make a copy of the RMD file and rename it to "RICHNET\_gemini.Rmd", delete the obsolete part and add a description of your plan before executing it.  
+
