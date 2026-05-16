@@ -297,47 +297,92 @@ The result of this network-based clustering is shown in Fig. \@ref(fig:figure4)
 
 # Automatic annotation of gene set clusters
 
-In analogy to the popular interactive network visualization tool _cytoscape_ [@Kucera2016], we attempt to generate automatic labels for gene set clusters. Gene set names are split into individual words and counted within each cluster. The four most frequent terms occuring at least twice are used as labels. The function `clust_head()` is defined for this purpose and contains an exclusion list of words not used.
 
-# Plan: Replace the current method for automatic annotation with a call to Gemini.
-# The goal is to obtain 5-word labels for each gene set cluster that best describe their common biological theme.
-# The output format will be consistent with the previous wordcount method.
-# For demonstration purposes, a placeholder function `gemini_annotate_cluster` is used,
-# which would ideally interact with the Gemini API to generate labels.
-# This function currently simulates the output for illustrative purposes.
 
-# Placeholder function for Gemini annotation
-# In a real scenario, this function would call the Gemini API
+
+```{r gemini_annotation}
+# Load necessary packages for API interaction and environment variables
+if (!requireNamespace("httr", quietly = TRUE)) install.packages("httr"); library(httr)
+if (!requireNamespace("jsonlite", quietly = TRUE)) install.packages("jsonlite"); library(jsonlite)
+
+# Load .env file (assuming it's in the current working directory)
+# Retrieve Gemini API key from environment variables
+env_file <- "C:/Users/mprummer/Documents/_Michael/nexus_github/RICHNET/.env"
+if (file.exists(env_file)) {
+  env_lines <- readLines(env_file, warn = FALSE)
+  env_lines <- env_lines[grepl("=", env_lines)]
+  if (length(env_lines) > 0) {
+    kv <- strsplit(env_lines, "=", fixed = TRUE)
+    env_list <- setNames(lapply(kv, function(x) paste(x[-1], collapse = "=")), sapply(kv, function(x) trimws(x[1])))
+    if ("GEMINI_API_KEY" %in% names(env_list)) GEMINI_API_KEY <- trimws(env_list[["GEMINI_API_KEY"]])
+  }
+}
+
+
+# Check if API key is available
+if (GEMINI_API_KEY == "") {
+  stop("GEMINI_API_KEY environment variable not found. Please set it in your .env file or system environment.")
+}
+
+# Define the Gemini API endpoint
+GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-latest:generateContent"
+
+# Function to call Gemini API for cluster annotation
 gemini_annotate_cluster = function(gene_set_names) {
-  # Simulate Gemini's response:
-  # Takes gene_set_names (a vector of names in a cluster)
-  # and returns a single 5-word label.
-  # For now, it will just return a generic label or a truncated version of the first gene set name
   if (length(gene_set_names) == 0) {
     return("No biological theme identified")
   }
+
+  # Construct the prompt as specified by the user
+  prompt_text = paste0(
+    "Given the following gene sets: ",
+    paste(gene_set_names, collapse = ", "),
+    ". Provide a 5-word label that best describes their common biological theme."
+  )
+
+  # Prepare the request body
+  request_body = list(
+    contents = list(
+      list(
+        parts = list(
+          list(text = prompt_text)
+        )
+      )
+    )
+  )
   
-  # Example: For real implementation, you'd use an API call here.
-  # For instance, using a hypothetical 'gemini_api' package:
-  # label = gemini_api$get_label(gene_set_names, num_words = 5)
+  # Make the API request
+  response = POST(
+    url = paste0(GEMINI_ENDPOINT, "?key=", GEMINI_API_KEY),
+    add_headers("Content-Type" = "application/json"),
+    body = toJSON(request_body, auto_unbox = TRUE)
+  )
   
-  # Simplified simulation:
-  first_name = gene_set_names[1]
-  
-  # Attempt to extract some meaningful words from the first gene set name
-  words = unlist(strsplit(gsub("_", " ", toupper(first_name)), " "))
-  
-  # Filter out common, uninformative words and take up to 5 unique words
-  # This part is a simplification and would be handled by Gemini's actual summarization
-  uninformative_words = c("KEGG", "REACTOME", "BIOCARTA", "PATHWAY", "SIGNALING", "REGULATION", "PROCESS")
-  meaningful_words = unique(words[!words %in% uninformative_words])
-  
-  label = paste(meaningful_words[1:min(5, length(meaningful_words))], collapse = " ")
-  if (nchar(label) == 0) {
-    return("General biological theme detected")
+  # Check for HTTP errors
+  if (http_error(response)) {
+    warning(paste("Gemini API request failed with status:", status_code(response)))
+    return("API Error: Could not get label")
   }
-  return(label)
+  
+  # Parse the JSON response
+  response_content = content(response, "text", encoding = "UTF-8")
+  parsed_response = fromJSON(response_content)
+  
+  # Extract the generated text
+  if (!is.null(parsed_response$candidates[[1]]$content$parts[[1]]$text)) {
+    label = parsed_response$candidates[[1]]$content$parts[[1]]$text
+    # Ensure it's approximately 5 words (Gemini is usually good at this, but for safety)
+    words = strsplit(label, "\\s+")[[1]]
+    label = paste(words[1:min(5, length(words))], collapse = " ")
+    return(label)
+  } else {
+    warning("Gemini API response did not contain a valid label.")
+    return("Annotation Failed")
+  }
 }
+
+```
+
 
 ### Lattice of annotated networks 
 
